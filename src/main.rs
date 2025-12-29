@@ -1,19 +1,4 @@
 //! TYPETUI - A terminal-based typing test application.
-//!
-//! This is a TUI (Text User Interface) typing test similar to MonkeyType,
-//! built with Rust using the ratatui library.
-//!
-//! ## Features
-//!
-//! - Two test modes: timed (30s, 60s, 90s, 120s) or word count (10-200 words)
-//! - Real-time feedback with color-coded characters
-//! - WPM (words per minute) and accuracy statistics
-//! - Vim-style keybindings (hjkl navigation)
-//!
-//! ## Usage
-//!
-//! Run the application with `cargo run`. Use arrow keys or hjkl to navigate
-//! the menu, Enter to start, and Esc to quit.
 
 mod app;
 mod ui;
@@ -29,11 +14,7 @@ use crossterm::{
 };
 use ratatui::{backend::CrosstermBackend, Terminal};
 
-use app::{App, AppState};
-
-// =============================================================================
-// Main Entry Point
-// =============================================================================
+use app::{App, CurrentScreen};
 
 /// Application entry point.
 ///
@@ -49,10 +30,6 @@ fn main() -> io::Result<()> {
 
     Ok(())
 }
-
-// =============================================================================
-// Terminal Setup/Teardown
-// =============================================================================
 
 /// Initializes the terminal for TUI rendering.
 ///
@@ -76,10 +53,6 @@ fn restore_terminal(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io
     )?;
     terminal.show_cursor()
 }
-
-// =============================================================================
-// Main Loop
-// =============================================================================
 
 /// Main application loop.
 ///
@@ -106,18 +79,14 @@ fn run_app(terminal: &mut Terminal<CrosstermBackend<io::Stdout>>) -> io::Result<
     }
 }
 
-// =============================================================================
-// Input Handling
-// =============================================================================
-
 /// Routes input to the appropriate handler based on app state.
 ///
 /// Returns `true` if the application should quit.
 fn handle_input(app: &mut App, key: KeyCode) -> bool {
-    match app.state {
-        AppState::Menu => handle_menu_input(app, key),
-        AppState::Running => handle_running_input(app, key),
-        AppState::Finished => handle_finished_input(app, key),
+    match &app.state {
+        CurrentScreen::Menu(_) => handle_menu_input(app, key),
+        CurrentScreen::TypingTest(_) => handle_running_input(app, key),
+        CurrentScreen::TestResults => handle_finished_input(app, key),
     }
 }
 

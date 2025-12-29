@@ -13,11 +13,16 @@ use ratatui::{
     Frame,
 };
 
-use crate::app::{App, AppState, CharResult, MenuField, TestMode, TIME_OPTIONS, WORD_OPTIONS};
+use crate::app::{App, CharResult, CurrentScreen, MenuField, TestMode, TIME_OPTIONS, WORD_OPTIONS};
 
-// =============================================================================
-// Constants
-// =============================================================================
+/// Theme colors for the application.
+/// This allows for easy theme customization and potential future theme support.
+mod theme {
+    use ratatui::style::Color;
+
+    /// Primary theme color used for highlights and accents.
+    pub const PRIMARY: Color = Color::Cyan;
+}
 
 /// ASCII art title displayed on the menu screen.
 const ASCII_TITLE: &[&str] = &[
@@ -29,14 +34,10 @@ const ASCII_TITLE: &[&str] = &[
     "   ╚═╝      ╚═╝   ╚═╝     ╚══════╝   ╚═╝    ╚═════╝ ╚═╝",
 ];
 
-// =============================================================================
-// Styles
-// =============================================================================
-
 /// Style for selected/highlighted menu items.
 fn style_selected() -> Style {
     Style::default()
-        .fg(Color::Yellow)
+        .fg(theme::PRIMARY)
         .add_modifier(Modifier::BOLD)
 }
 
@@ -57,7 +58,12 @@ fn style_correct() -> Style {
 
 /// Style for incorrectly typed characters.
 fn style_incorrect() -> Style {
-    Style::default().fg(Color::White).bg(Color::Red)
+    Style::default().fg(Color::Red)
+}
+
+/// Style for characters that were corrected (initially incorrect, then fixed).
+fn style_corrected() -> Style {
+    Style::default().fg(Color::LightYellow)
 }
 
 /// Style for characters not yet typed.
@@ -72,36 +78,28 @@ fn style_cursor() -> Style {
         .add_modifier(Modifier::UNDERLINED)
 }
 
-// =============================================================================
-// Main Draw Function
-// =============================================================================
-
 /// Main entry point for rendering the UI.
 ///
 /// Dispatches to the appropriate screen based on app state.
 pub fn draw(frame: &mut Frame, app: &App) {
-    match app.state {
-        AppState::Menu => draw_menu_screen(frame, app),
-        AppState::Running => draw_typing_screen(frame, app),
-        AppState::Finished => draw_results_screen(frame, app),
+    match &app.state {
+        CurrentScreen::Menu(_) => draw_menu_screen(frame, app),
+        CurrentScreen::TypingTest(_) => draw_typing_screen(frame, app),
+        CurrentScreen::TestResults => draw_results_screen(frame, app),
     }
 }
-
-// =============================================================================
-// Menu Screen
-// =============================================================================
 
 /// Renders the menu screen with title and settings.
 fn draw_menu_screen(frame: &mut Frame, app: &App) {
     let area = frame.area();
 
     let chunks = Layout::vertical([
-        Constraint::Length(3),  // Top padding
-        Constraint::Length(8),  // ASCII art title
-        Constraint::Length(2),  // Spacing below title
-        Constraint::Length(9),  // Settings box
-        Constraint::Min(1),     // Spacer
-        Constraint::Length(2),  // Help text
+        Constraint::Length(3), // Top padding
+        Constraint::Length(8), // ASCII art title
+        Constraint::Length(2), // Spacing below title
+        Constraint::Length(9), // Settings box
+        Constraint::Min(1),    // Spacer
+        Constraint::Length(2), // Help text
     ])
     .split(area);
 
@@ -118,7 +116,7 @@ fn draw_title(frame: &mut Frame, area: Rect) {
             Line::from(Span::styled(
                 *line,
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(theme::PRIMARY)
                     .add_modifier(Modifier::BOLD),
             ))
         })
@@ -152,12 +150,12 @@ fn draw_settings(frame: &mut Frame, app: &App, full_area: Rect, chunk: Rect) {
     );
 
     let rows = Layout::vertical([
-        Constraint::Length(1),  // Spacer
-        Constraint::Length(1),  // Mode
-        Constraint::Length(1),  // Spacer
-        Constraint::Length(1),  // Value
-        Constraint::Length(1),  // Spacer
-        Constraint::Length(1),  // Start
+        Constraint::Length(1), // Spacer
+        Constraint::Length(1), // Mode
+        Constraint::Length(1), // Spacer
+        Constraint::Length(1), // Value
+        Constraint::Length(1), // Spacer
+        Constraint::Length(1), // Start
     ])
     .split(inner_area);
 
@@ -168,8 +166,16 @@ fn draw_settings(frame: &mut Frame, app: &App, full_area: Rect, chunk: Rect) {
 
 /// Renders the mode selection row (Time/Words).
 fn draw_mode_row(frame: &mut Frame, app: &App, area: Rect) {
-    let is_selected = app.menu_field == MenuField::Mode;
-    let style = if is_selected { style_selected() } else { style_unselected() };
+    let is_selected = if let CurrentScreen::Menu(menu) = &app.state {
+        menu.menu_field == MenuField::Mode
+    } else {
+        false
+    };
+    let style = if is_selected {
+        style_selected()
+    } else {
+        style_unselected()
+    };
 
     let mode_value = match app.test_mode {
         TestMode::Time => "Time",
@@ -186,8 +192,16 @@ fn draw_mode_row(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Renders the value selection row (duration or word count).
 fn draw_value_row(frame: &mut Frame, app: &App, area: Rect) {
-    let is_selected = app.menu_field == MenuField::Value;
-    let style = if is_selected { style_selected() } else { style_unselected() };
+    let is_selected = if let CurrentScreen::Menu(menu) = &app.state {
+        menu.menu_field == MenuField::Value
+    } else {
+        false
+    };
+    let style = if is_selected {
+        style_selected()
+    } else {
+        style_unselected()
+    };
 
     let (label, value_text) = match app.test_mode {
         TestMode::Time => {
@@ -197,14 +211,32 @@ fn draw_value_row(frame: &mut Frame, app: &App, area: Rect) {
             } else {
                 format!("{}s", secs)
             };
-            let left = if app.time_option_idx > 0 { "◄ " } else { "  " };
-            let right = if app.time_option_idx < TIME_OPTIONS.len() - 1 { " ►" } else { "  " };
+            let time_option_idx = if let CurrentScreen::Menu(menu) = &app.state {
+                menu.time_option_idx
+            } else {
+                0
+            };
+            let left = if time_option_idx > 0 { "◄ " } else { "  " };
+            let right = if time_option_idx < TIME_OPTIONS.len() - 1 {
+                " ►"
+            } else {
+                "  "
+            };
             ("    Time:", format!("{}{:^7}{}", left, display, right))
         }
         TestMode::Words => {
             let count = app.target_word_count();
-            let left = if app.word_option_idx > 0 { "◄ " } else { "  " };
-            let right = if app.word_option_idx < WORD_OPTIONS.len() - 1 { " ►" } else { "  " };
+            let word_option_idx = if let CurrentScreen::Menu(menu) = &app.state {
+                menu.word_option_idx
+            } else {
+                0
+            };
+            let left = if word_option_idx > 0 { "◄ " } else { "  " };
+            let right = if word_option_idx < WORD_OPTIONS.len() - 1 {
+                " ►"
+            } else {
+                "  "
+            };
             ("   Words:", format!("{}{:^7}{}", left, count, right))
         }
     };
@@ -219,14 +251,15 @@ fn draw_value_row(frame: &mut Frame, app: &App, area: Rect) {
 
 /// Renders the start button row.
 fn draw_start_row(frame: &mut Frame, app: &App, area: Rect) {
-    let is_selected = app.menu_field == MenuField::Start;
-    let style = if is_selected {
-        Style::default()
-            .fg(Color::Black)
-            .bg(Color::Green)
-            .add_modifier(Modifier::BOLD)
+    let is_selected = if let CurrentScreen::Menu(menu) = &app.state {
+        menu.menu_field == MenuField::Start
     } else {
-        Style::default().fg(Color::Green)
+        false
+    };
+    let style = if is_selected {
+        style_selected()
+    } else {
+        style_unselected()
     };
 
     let line = Line::from(vec![
@@ -248,10 +281,6 @@ fn draw_menu_help(frame: &mut Frame, area: Rect) {
     frame.render_widget(help, area);
 }
 
-// =============================================================================
-// Typing Screen
-// =============================================================================
-
 /// Renders the main typing test screen.
 fn draw_typing_screen(frame: &mut Frame, app: &App) {
     let area = frame.area();
@@ -265,12 +294,12 @@ fn draw_typing_screen(frame: &mut Frame, app: &App) {
     );
 
     let chunks = Layout::vertical([
-        Constraint::Length(3),  // Timer
-        Constraint::Length(3),  // Top padding
-        Constraint::Length(5),  // Words (3 lines + border)
-        Constraint::Length(3),  // Bottom padding
-        Constraint::Length(3),  // Input
-        Constraint::Min(0),     // Absorb remaining space
+        Constraint::Length(3), // Timer
+        Constraint::Length(3), // Top padding
+        Constraint::Length(5), // Words (3 lines + border)
+        Constraint::Length(3), // Bottom padding
+        Constraint::Length(3), // Input
+        Constraint::Min(0),    // Absorb remaining space
     ])
     .split(padded_area);
 
@@ -298,10 +327,15 @@ fn draw_timer(frame: &mut Frame, app: &App, area: Rect) {
             }
             TestMode::Words => {
                 let elapsed = app.time_elapsed().as_secs_f64();
+                let current_word_idx = if let CurrentScreen::TypingTest(test_state) = &app.state {
+                    test_state.current_word_idx
+                } else {
+                    0
+                };
                 let text = format!(
                     "{}/{} words  |  {:.1}s",
-                    app.current_word_idx,
-                    app.words.len(),
+                    current_word_idx,
+                    app.word_states.len(),
                     elapsed
                 );
                 (text, Color::Cyan, "Progress")
@@ -339,8 +373,17 @@ fn draw_words(frame: &mut Frame, app: &App, area: Rect) {
     }
 
     let lines = build_word_lines(app, line_width);
-    let current_line = find_current_line(&lines, app.current_word_idx);
-    let first_visible = current_line.saturating_sub(1).max(if current_line >= 2 { current_line - 1 } else { 0 });
+    let current_word_idx = if let CurrentScreen::TypingTest(test_state) = &app.state {
+        test_state.current_word_idx
+    } else {
+        0
+    };
+    let current_line = find_current_line(&lines, current_word_idx);
+    let first_visible = current_line.saturating_sub(1).max(if current_line >= 2 {
+        current_line - 1
+    } else {
+        0
+    });
 
     let visible_lines: Vec<Line> = lines
         .iter()
@@ -360,8 +403,8 @@ fn build_word_lines(app: &App, line_width: usize) -> Vec<Vec<(usize, String)>> {
     let mut current_line = Vec::new();
     let mut current_width = 0;
 
-    for (idx, word) in app.words.iter().enumerate() {
-        let word_len = word.len() + 1; // +1 for space
+    for (idx, word_state) in app.word_states.iter().enumerate() {
+        let word_len = word_state.target.len() + 1; // +1 for space
 
         if current_width + word_len > line_width && !current_line.is_empty() {
             lines.push(current_line);
@@ -369,7 +412,7 @@ fn build_word_lines(app: &App, line_width: usize) -> Vec<Vec<(usize, String)>> {
             current_width = 0;
         }
 
-        current_line.push((idx, word.clone()));
+        current_line.push((idx, word_state.target.clone()));
         current_width += word_len;
     }
 
@@ -392,20 +435,39 @@ fn find_current_line(lines: &[Vec<(usize, String)>], current_word_idx: usize) ->
 fn render_word_line(app: &App, line_words: &[(usize, String)]) -> Line<'static> {
     let mut spans = Vec::new();
 
+    let current_word_idx = if let CurrentScreen::TypingTest(test_state) = &app.state {
+        test_state.current_word_idx
+    } else {
+        0
+    };
+
+    // Check if the current word is complete (space is next expected character)
+    let space_is_cursor = if let CurrentScreen::TypingTest(test_state) = &app.state {
+        if current_word_idx < app.word_states.len() {
+            let word_state = &app.word_states[current_word_idx];
+            test_state.typed_input.len() >= word_state.target.len()
+        } else {
+            false
+        }
+    } else {
+        false
+    };
+
     for (idx, word) in line_words {
-        if *idx < app.current_word_idx {
-            // Completed word
-            let style = if app.word_completed_correctly(*idx) {
-                style_correct()
-            } else {
-                Style::default().fg(Color::Red)
-            };
-            spans.push(Span::styled(word.clone(), style));
+        if *idx < current_word_idx {
+            // Completed word - render character by character
+            spans.extend(render_word_characters(app, *idx, false));
             spans.push(Span::raw(" "));
-        } else if *idx == app.current_word_idx {
+        } else if *idx == current_word_idx {
             // Current word - render character by character
-            spans.extend(render_current_word(app, word));
-            spans.push(Span::raw(" "));
+            spans.extend(render_current_word(app, *idx));
+            // Underline space if it's the next expected character
+            let space_style = if space_is_cursor {
+                style_cursor()
+            } else {
+                Style::default()
+            };
+            spans.push(Span::styled(" ", space_style));
         } else {
             // Upcoming word
             spans.push(Span::styled(word.clone(), style_pending()));
@@ -416,20 +478,38 @@ fn render_word_line(app: &App, line_words: &[(usize, String)]) -> Line<'static> 
     Line::from(spans)
 }
 
-/// Renders the current word being typed with per-character styling.
-fn render_current_word(app: &App, word: &str) -> Vec<Span<'static>> {
+/// Renders a word with per-character styling based on character results.
+///
+/// For completed words, all characters are styled based on their results.
+/// For the current word, untyped characters show as pending and the cursor position is underlined.
+fn render_word_characters(app: &App, word_idx: usize, is_current: bool) -> Vec<Span<'static>> {
     let mut spans = Vec::new();
-    let typed_len = app.typed_input.len();
-    let word_idx = app.current_word_idx;
 
-    for (char_idx, c) in word.chars().enumerate() {
+    if word_idx >= app.word_states.len() {
+        return spans;
+    }
+
+    let word_state = &app.word_states[word_idx];
+    let typed_len = if is_current {
+        if let CurrentScreen::TypingTest(test_state) = &app.state {
+            test_state.typed_input.len()
+        } else {
+            0
+        }
+    } else {
+        // For completed words, use the stored typed input length
+        word_state.typed.len()
+    };
+
+    for (char_idx, c) in word_state.target.chars().enumerate() {
         let style = if char_idx < typed_len {
-            match app.word_char_results[word_idx].get(char_idx) {
+            match word_state.results.get(char_idx) {
                 Some(CharResult::Correct) => style_correct(),
                 Some(CharResult::Incorrect) => style_incorrect(),
+                Some(CharResult::Corrected) => style_corrected(),
                 None => style_pending(),
             }
-        } else if char_idx == typed_len {
+        } else if is_current && char_idx == typed_len {
             style_cursor()
         } else {
             style_pending()
@@ -438,47 +518,92 @@ fn render_current_word(app: &App, word: &str) -> Vec<Span<'static>> {
     }
 
     // Extra characters typed beyond word length
-    if typed_len > word.len() {
-        let extra: String = app.typed_input.chars().skip(word.len()).collect();
-        spans.push(Span::styled(extra, style_incorrect()));
+    if typed_len > word_state.target.len() {
+        let extra: String = if is_current {
+            if let CurrentScreen::TypingTest(test_state) = &app.state {
+                test_state
+                    .typed_input
+                    .chars()
+                    .skip(word_state.target.len())
+                    .collect()
+            } else {
+                String::new()
+            }
+        } else {
+            // For completed words, get extra characters from typed
+            word_state
+                .typed
+                .chars()
+                .skip(word_state.target.len())
+                .collect()
+        };
+        if !extra.is_empty() {
+            spans.push(Span::styled(extra, style_incorrect()));
+        }
     }
 
     spans
 }
 
+/// Renders the current word being typed with per-character styling.
+fn render_current_word(app: &App, word_idx: usize) -> Vec<Span<'static>> {
+    render_word_characters(app, word_idx, true)
+}
+
 /// Renders the input field showing what the user is typing.
 fn draw_input(frame: &mut Frame, app: &App, area: Rect) {
-    let input = Paragraph::new(format!("> {}_", app.typed_input))
+    let typed_input = if let CurrentScreen::TypingTest(test_state) = &app.state {
+        test_state.typed_input.as_str()
+    } else {
+        ""
+    };
+    let input = Paragraph::new(format!("> {}_", typed_input))
         .style(Style::default().fg(Color::White))
         .block(Block::default().borders(Borders::ALL).title("Input"));
 
     frame.render_widget(input, area);
 }
 
-// =============================================================================
-// Results Screen
-// =============================================================================
-
 /// Renders the results screen with test statistics.
 fn draw_results_screen(frame: &mut Frame, app: &App) {
     let area = frame.area();
     let stats = app.calculate_stats();
 
+    let chunks = Layout::vertical([
+        Constraint::Min(0),    // Results box (takes available space)
+        Constraint::Length(1), // Instructions
+    ])
+    .split(area);
+
     let text = vec![
         Line::from(""),
         stat_line("WPM: ", format!("{:.0}", stats.wpm), Color::Cyan),
         Line::from(""),
-        stat_line("Accuracy: ", format!("{:.1}%", stats.accuracy), Color::Green),
+        stat_line(
+            "Accuracy: ",
+            format!("{:.1}%", stats.accuracy),
+            Color::Green,
+        ),
         Line::from(""),
-        stat_line("Total Errors: ", format!("{}", stats.total_errors), Color::Red),
+        stat_line(
+            "Total Errors: ",
+            format!("{}", stats.total_errors),
+            Color::Red,
+        ),
         Line::from(""),
-        stat_line("Words with mistakes: ", format!("{}", stats.words_with_errors), Color::Red),
+        stat_line(
+            "Words with mistakes: ",
+            format!("{}", stats.words_with_errors),
+            Color::Red,
+        ),
         Line::from(""),
         Line::from(vec![
             Span::raw("Characters: "),
             Span::styled(
                 format!("{}", stats.correct_chars),
-                Style::default().fg(Color::Green).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::raw("/"),
             Span::styled(
@@ -486,24 +611,25 @@ fn draw_results_screen(frame: &mut Frame, app: &App) {
                 Style::default().add_modifier(Modifier::BOLD),
             ),
         ]),
-        Line::from(""),
-        Line::from(""),
-        Line::from(Span::styled(
-            "Press 'r' to return to menu | Press 'q' to quit",
-            style_label(),
-        )),
     ];
 
-    let results = Paragraph::new(text)
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .title("Results")
-                .title_alignment(Alignment::Center),
-        );
+    let results = Paragraph::new(text).alignment(Alignment::Center).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .title(" Results ")
+            .title_alignment(Alignment::Center),
+    );
 
-    frame.render_widget(results, area);
+    frame.render_widget(results, chunks[0]);
+
+    // Render instructions below the results box
+    let instructions = Paragraph::new(Line::from(Span::styled(
+        "Press 'r' to return to menu | Press 'q' to quit",
+        style_label(),
+    )))
+    .alignment(Alignment::Center);
+
+    frame.render_widget(instructions, chunks[1]);
 }
 
 /// Helper to create a statistics line with colored value.
