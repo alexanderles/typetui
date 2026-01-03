@@ -189,6 +189,7 @@ impl App {
             if self.test_mode == TestMode::Time {
                 if let Some(start) = self.start_time {
                     if start.elapsed() >= self.duration {
+                        self.end_time = Some(Instant::now());
                         self.state = CurrentScreen::TestResults;
                     }
                 }
