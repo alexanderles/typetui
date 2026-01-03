@@ -11,7 +11,7 @@
 
 </div>
 
-A terminal-based typing test application built with Rust.
+A terminal-based typing test application built with Rust using [Ratatui](https://ratatui.rs/).
 
 ## Install and Run Locally
 
