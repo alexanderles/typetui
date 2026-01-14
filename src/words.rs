@@ -3,8 +3,8 @@
 //! This module provides a pool of common English words and a function
 //! to generate random word lists for typing tests.
 
-use rand::seq::SliceRandom;
-use rand::thread_rng;
+use rand::prelude::IndexedRandom;
+use rand::rng;
 use serde::Deserialize;
 use std::sync::OnceLock;
 
@@ -54,7 +54,7 @@ fn get_words() -> &'static [String] {
 /// assert_eq!(words.len(), 25);
 /// ```
 pub fn generate_words(count: usize) -> Vec<String> {
-    let mut rng = thread_rng();
+    let mut rng = rng();
     let words_pool = get_words();
     let mut words: Vec<String> = Vec::with_capacity(count);
 

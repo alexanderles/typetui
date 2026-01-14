@@ -87,21 +87,21 @@ impl App {
 
     /// Moves menu selection up.
     pub fn menu_up(&mut self) {
-        if let CurrentScreen::Menu(ref mut menu) = &mut self.state {
+        if let CurrentScreen::Menu(menu) = &mut self.state {
             menu.up();
         }
     }
 
     /// Moves menu selection down.
     pub fn menu_down(&mut self) {
-        if let CurrentScreen::Menu(ref mut menu) = &mut self.state {
+        if let CurrentScreen::Menu(menu) = &mut self.state {
             menu.down();
         }
     }
 
     /// Handles left arrow in menu (toggle mode or decrement value).
     pub fn menu_left(&mut self) {
-        if let CurrentScreen::Menu(ref mut menu) = &mut self.state {
+        if let CurrentScreen::Menu(menu) = &mut self.state {
             match menu.menu_field {
                 MenuField::Mode => {
                     menu.toggle_mode(&mut self.test_mode);
@@ -119,7 +119,7 @@ impl App {
 
     /// Handles right arrow in menu (toggle mode or increment value).
     pub fn menu_right(&mut self) {
-        if let CurrentScreen::Menu(ref mut menu) = &mut self.state {
+        if let CurrentScreen::Menu(menu) = &mut self.state {
             match menu.menu_field {
                 MenuField::Mode => {
                     menu.toggle_mode(&mut self.test_mode);
@@ -142,7 +142,7 @@ impl App {
         let word_count = match self.test_mode {
             TestMode::Time => 200,
             TestMode::Words => {
-                if let CurrentScreen::Menu(ref menu) = &self.state {
+                if let CurrentScreen::Menu(menu) = &self.state {
                     menu.target_word_count() as usize
                 } else {
                     25
@@ -204,7 +204,7 @@ impl App {
     /// - Updates statistics
     /// - Ends the test in Words mode when the last letter of the last word is typed
     pub fn on_char(&mut self, c: char) {
-        if let CurrentScreen::TypingTest(ref mut test_state) = &mut self.state {
+        if let CurrentScreen::TypingTest(test_state) = &mut self.state {
             if test_state.current_word_idx < self.word_states.len() {
                 let current_word_idx = test_state.current_word_idx;
                 let word_state = &mut self.word_states[current_word_idx];
@@ -278,7 +278,7 @@ impl App {
     pub fn on_backspace(&mut self) {
         // Get current state info before mutable borrow
         let (should_go_back, prev_idx, current_word_idx, restored_input) =
-            if let CurrentScreen::TypingTest(ref test_state) = &self.state {
+            if let CurrentScreen::TypingTest(test_state) = &self.state {
                 let should_go_back =
                     test_state.typed_input.is_empty() && test_state.current_word_idx > 0;
                 let prev_idx = test_state.current_word_idx.saturating_sub(1);
@@ -293,7 +293,7 @@ impl App {
                 (false, 0, 0, String::new())
             };
 
-        if let CurrentScreen::TypingTest(ref mut test_state) = &mut self.state {
+        if let CurrentScreen::TypingTest(test_state) = &mut self.state {
             // If at the start of current word and not at first word, go back to previous word
             if should_go_back {
                 // Restore previous word's typed input
@@ -328,7 +328,7 @@ impl App {
 
     /// Handles space being pressed.
     pub fn on_space(&mut self) {
-        if let CurrentScreen::TypingTest(ref mut test_state) = &mut self.state {
+        if let CurrentScreen::TypingTest(test_state) = &mut self.state {
             if test_state.current_word_idx >= self.word_states.len() {
                 return;
             }
@@ -376,7 +376,7 @@ impl App {
 
     /// Returns the selected time duration in seconds.
     pub fn time_seconds(&self) -> u32 {
-        if let CurrentScreen::Menu(ref menu) = &self.state {
+        if let CurrentScreen::Menu(menu) = &self.state {
             menu.time_seconds()
         } else {
             TIME_OPTIONS[0] // Default fallback
@@ -385,7 +385,7 @@ impl App {
 
     /// Returns the selected target word count.
     pub fn target_word_count(&self) -> u32 {
-        if let CurrentScreen::Menu(ref menu) = &self.state {
+        if let CurrentScreen::Menu(menu) = &self.state {
             menu.target_word_count()
         } else {
             WORD_OPTIONS[1] // Default fallback
