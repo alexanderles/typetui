@@ -94,12 +94,12 @@ fn draw_menu_screen(frame: &mut Frame, app: &App) {
     let area = frame.area();
 
     let chunks = Layout::vertical([
-        Constraint::Length(3), // Top padding
-        Constraint::Length(8), // ASCII art title
-        Constraint::Length(2), // Spacing below title
-        Constraint::Length(9), // Settings box
-        Constraint::Min(1),    // Spacer
-        Constraint::Length(2), // Help text
+        Constraint::Length(3),  // Top padding
+        Constraint::Length(8),  // ASCII art title
+        Constraint::Length(2),  // Spacing below title
+        Constraint::Length(11), // Settings box
+        Constraint::Min(1),     // Spacer
+        Constraint::Length(2),  // Help text
     ])
     .split(area);
 
@@ -155,13 +155,16 @@ fn draw_settings(frame: &mut Frame, app: &App, full_area: Rect, chunk: Rect) {
         Constraint::Length(1), // Spacer
         Constraint::Length(1), // Value
         Constraint::Length(1), // Spacer
+        Constraint::Length(1), // Punctuation
+        Constraint::Length(1), // Spacer
         Constraint::Length(1), // Start
     ])
     .split(inner_area);
 
     draw_mode_row(frame, app, rows[1]);
     draw_value_row(frame, app, rows[3]);
-    draw_start_row(frame, app, rows[5]);
+    draw_punctuation_row(frame, app, rows[5]);
+    draw_start_row(frame, app, rows[7]);
 }
 
 /// Renders the mode selection row (Time/Words).
@@ -244,6 +247,29 @@ fn draw_value_row(frame: &mut Frame, app: &App, area: Rect) {
     let line = Line::from(vec![
         Span::styled(format!("{}  ", label), style_label()),
         Span::styled(value_text, style),
+    ]);
+
+    frame.render_widget(Paragraph::new(line), area);
+}
+
+/// Renders the punctuation toggle row.
+fn draw_punctuation_row(frame: &mut Frame, app: &App, area: Rect) {
+    let is_selected = if let CurrentScreen::Menu(menu) = &app.state {
+        menu.menu_field == MenuField::Punctuation
+    } else {
+        false
+    };
+    let style = if is_selected {
+        style_selected()
+    } else {
+        style_unselected()
+    };
+
+    let value = if app.punctuation { "On" } else { "Off" };
+
+    let line = Line::from(vec![
+        Span::styled("   Punct:  ", style_label()),
+        Span::styled(format!("◄ {:^5} ►", value), style),
     ]);
 
     frame.render_widget(Paragraph::new(line), area);
