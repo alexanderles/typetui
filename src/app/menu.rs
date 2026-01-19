@@ -29,7 +29,8 @@ impl MenuState {
         self.menu_field = match self.menu_field {
             MenuField::Mode => MenuField::Mode,
             MenuField::Value => MenuField::Mode,
-            MenuField::Start => MenuField::Value,
+            MenuField::Punctuation => MenuField::Value,
+            MenuField::Start => MenuField::Punctuation,
         };
     }
 
@@ -37,7 +38,8 @@ impl MenuState {
     pub fn down(&mut self) {
         self.menu_field = match self.menu_field {
             MenuField::Mode => MenuField::Value,
-            MenuField::Value => MenuField::Start,
+            MenuField::Value => MenuField::Punctuation,
+            MenuField::Punctuation => MenuField::Start,
             MenuField::Start => MenuField::Start,
         };
     }

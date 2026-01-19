@@ -1,6 +1,6 @@
 //! Application state and logic for the typing test.
 
-mod constants;
+pub mod constants;
 mod menu;
 mod stats;
 mod types;
@@ -39,6 +39,8 @@ pub struct App {
     pub time_option_idx: usize,
     /// Index into `WORD_OPTIONS` for selected word count (persists between test runs).
     pub word_option_idx: usize,
+    /// Whether punctuation is enabled for word generation.
+    pub punctuation: bool,
     /// Current application state.
     pub state: CurrentScreen,
 }
@@ -63,6 +65,7 @@ impl App {
             test_mode: TestMode::Time,
             time_option_idx,
             word_option_idx,
+            punctuation: false,
             state: CurrentScreen::Menu(menu),
         }
     }
@@ -78,11 +81,10 @@ impl App {
                 results: Vec::new(),
             })
             .collect();
-        Self {
-            word_states,
-            state: CurrentScreen::TypingTest(TypingTestState::new()),
-            ..Self::new()
-        }
+        let mut app = Self::new();
+        app.word_states = word_states;
+        app.state = CurrentScreen::TypingTest(TypingTestState::new());
+        app
     }
 
     /// Moves menu selection up.
@@ -112,6 +114,9 @@ impl App {
                     self.time_option_idx = menu.time_option_idx;
                     self.word_option_idx = menu.word_option_idx;
                 }
+                MenuField::Punctuation => {
+                    self.punctuation = !self.punctuation;
+                }
                 MenuField::Start => {}
             }
         }
@@ -129,6 +134,9 @@ impl App {
                     // Update persisted indices
                     self.time_option_idx = menu.time_option_idx;
                     self.word_option_idx = menu.word_option_idx;
+                }
+                MenuField::Punctuation => {
+                    self.punctuation = !self.punctuation;
                 }
                 MenuField::Start => {}
             }
@@ -150,7 +158,7 @@ impl App {
             }
         };
 
-        let words = generate_words(word_count);
+        let words = generate_words(word_count, self.punctuation);
         self.word_states = words
             .into_iter()
             .map(|target| WordState {
@@ -480,6 +488,15 @@ mod tests {
             "Expected Menu state"
         );
         if let CurrentScreen::Menu(menu) = &app.state {
+            assert_eq!(menu.menu_field, MenuField::Punctuation);
+        }
+
+        app.menu_down();
+        assert!(
+            matches!(&app.state, CurrentScreen::Menu(_)),
+            "Expected Menu state"
+        );
+        if let CurrentScreen::Menu(menu) = &app.state {
             assert_eq!(menu.menu_field, MenuField::Start);
         }
 
@@ -490,6 +507,15 @@ mod tests {
         );
         if let CurrentScreen::Menu(menu) = &app.state {
             assert_eq!(menu.menu_field, MenuField::Start);
+        }
+
+        app.menu_up();
+        assert!(
+            matches!(&app.state, CurrentScreen::Menu(_)),
+            "Expected Menu state"
+        );
+        if let CurrentScreen::Menu(menu) = &app.state {
+            assert_eq!(menu.menu_field, MenuField::Punctuation);
         }
 
         app.menu_up();

@@ -16,6 +16,8 @@ pub enum MenuField {
     Mode,
     /// Value selection (duration or word count).
     Value,
+    /// Punctuation toggle (On/Off).
+    Punctuation,
     /// Start button.
     Start,
 }
