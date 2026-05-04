@@ -2,11 +2,6 @@
 
 /// For each whole second `s` from 1 through `floor(elapsed_secs)`, WPM is
 /// `(correct_chars through time s) / 5 / (s / 60)`.
-///
-/// Uses the **maximum** `correct_chars` among samples with `t <= s`. While
-/// `correct_chars` is monotonic (current app behavior), this matches the last
-/// sample at or before `s`; after a future backspace-counter fix, switch to
-/// last-at-or-before instead of `max`.
 pub fn build_cumulative_wpm_points(
     samples: &[(f64, usize)],
     elapsed_secs: f64,
@@ -31,8 +26,8 @@ fn correct_chars_at_or_before(samples: &[(f64, usize)], deadline_secs: f64) -> u
     samples
         .iter()
         .filter(|(t, _)| *t <= deadline_secs)
+        .last()
         .map(|(_, c)| *c)
-        .max()
         .unwrap_or(0)
 }
 
@@ -73,5 +68,14 @@ mod tests {
         assert!((pts[0].1 - 60.0).abs() < 0.01);
         assert!((pts[1].1 - 90.0).abs() < 0.01);
         assert!((pts[2].1 - 160.0).abs() < 0.01);
+    }
+
+    #[test]
+    fn decreasing_correct_chars_uses_last_sample_not_max() {
+        let samples = vec![(0.5, 10), (1.5, 20), (2.0, 5)];
+        let pts = build_cumulative_wpm_points(&samples, 3.0);
+        assert_eq!(pts.len(), 3);
+        let wpm2 = (5.0 / 5.0) / (2.0 / 60.0);
+        assert!((pts[1].1 - wpm2).abs() < 0.01);
     }
 }

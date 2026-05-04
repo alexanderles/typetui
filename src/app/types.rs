@@ -44,6 +44,24 @@ pub struct WordState {
     pub results: Vec<CharResult>,
 }
 
+impl WordState {
+    /// True if the submitted word is over-typed, or any typed position still has
+    /// [`CharResult::Incorrect`] (_byte indices align with `typed_input.len()` / results,
+    /// same as [`crate::app::typing_test::TypingTestState::on_char`]).
+    ///
+    /// [`CharResult::Corrected`] does not count — the mistake was fixed before advancing.
+    pub fn completed_with_remaining_errors(&self, typed_input: &str) -> bool {
+        let typed_len = typed_input.len();
+        if typed_len > self.target.len() {
+            return true;
+        }
+        self.results
+            .iter()
+            .take(typed_len)
+            .any(|&r| r == CharResult::Incorrect)
+    }
+}
+
 /// The current state of the application.
 ///
 /// Note: MenuState and TypingTestState are defined in their respective modules

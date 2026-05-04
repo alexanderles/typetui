@@ -245,12 +245,11 @@ impl App {
 
                 // Extract values needed for checking if test should end
                 let typed_input_len = test_state.typed_input.len();
-                let current_word_has_error = test_state.current_word_has_error;
                 let typed_input = test_state.typed_input.clone();
 
                 // Check if we should end the test (Words mode, last word, word is complete)
                 if self.should_end_test(current_word_idx, typed_input_len) {
-                    self.end_test(current_word_idx, &typed_input, current_word_has_error);
+                    self.end_test(current_word_idx, &typed_input);
                 }
             }
         }
@@ -274,21 +273,13 @@ impl App {
     }
 
     /// Ends the test, saving state and freezing the timer.
-    fn end_test(
-        &mut self,
-        current_word_idx: usize,
-        typed_input: &str,
-        current_word_has_error: bool,
-    ) {
+    fn end_test(&mut self, current_word_idx: usize, typed_input: &str) {
         let word_state = &mut self.word_states[current_word_idx];
-        let target_len = word_state.target.len();
 
         // Save typed input before ending
         word_state.typed = typed_input.to_string();
 
-        // Check for errors
-        let has_error = current_word_has_error || typed_input.len() > target_len;
-        if has_error {
+        if word_state.completed_with_remaining_errors(typed_input) {
             self.words_with_errors.push(current_word_idx);
         }
 
@@ -364,7 +355,19 @@ impl App {
             } else {
                 // Normal backspace on current word
                 if current_word_idx < self.word_states.len() {
-                    test_state.on_backspace(&mut self.word_states[current_word_idx]);
+                    let changed = test_state.on_backspace(
+                        &mut self.word_states[current_word_idx],
+                        &mut self.total_chars_typed,
+                        &mut self.correct_chars,
+                    );
+                    if changed {
+                        if let Some(start) = self.start_time {
+                            self.wpm_samples.push((
+                                start.elapsed().as_secs_f64(),
+                                self.correct_chars,
+                            ));
+                        }
+                    }
                 }
             }
         }
@@ -804,6 +807,8 @@ mod tests {
                 3
             );
         }
+        assert_eq!(app.total_chars_typed, 2);
+        assert_eq!(app.correct_chars, 2);
     }
 
     #[test]
@@ -823,6 +828,27 @@ mod tests {
         );
         if let CurrentScreen::TypingTest(test_state) = &app.state {
             assert!(test_state.typed_input.is_empty());
+        }
+        assert_eq!(app.total_chars_typed, 0);
+        assert_eq!(app.correct_chars, 0);
+    }
+
+    #[test]
+    fn test_backspace_after_correct_char_recounts() {
+        let mut app = running_app();
+        for c in "the".chars() {
+            app.on_char(c);
+        }
+        assert_eq!(app.correct_chars, 3);
+        assert_eq!(app.total_chars_typed, 3);
+        app.on_backspace();
+        assert_eq!(app.correct_chars, 2);
+        assert_eq!(app.total_chars_typed, 2);
+        app.on_char('e');
+        assert_eq!(app.correct_chars, 3);
+        assert_eq!(app.total_chars_typed, 3);
+        if let CurrentScreen::TypingTest(test_state) = &app.state {
+            assert_eq!(test_state.typed_input, "the");
         }
     }
 
@@ -885,6 +911,27 @@ mod tests {
 
         let stats = app.calculate_stats();
         assert_eq!(stats.words_with_errors, 1);
+    }
+
+    #[test]
+    fn test_words_with_errors_zero_after_full_correction() {
+        let mut app = running_app();
+        for c in "the".chars() {
+            app.on_char(c);
+        }
+        app.on_space();
+
+        app.on_char('q');
+        app.on_char('u');
+        app.on_char('x');
+        app.on_backspace();
+        for c in "ick".chars() {
+            app.on_char(c);
+        }
+        app.on_space();
+
+        let stats = app.calculate_stats();
+        assert_eq!(stats.words_with_errors, 0);
     }
 
     #[test]

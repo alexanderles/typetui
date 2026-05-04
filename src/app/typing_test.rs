@@ -86,12 +86,36 @@ impl TypingTestState {
     /// Removes the last typed character but preserves the full results history.
     /// The results array is not truncated, allowing correction state to persist
     /// even when backspacing across word boundaries.
-    pub fn on_backspace(&mut self, _word_state: &mut WordState) {
+    ///
+    /// Decrements `total_chars_typed` for every removed keystroke, and
+    /// `correct_chars` only when the removed position was [`CharResult::Correct`]
+    /// or [`CharResult::Corrected`] (matching what [`Self::on_char`] incremented).
+    ///
+    /// Returns `true` if a character was removed.
+    pub fn on_backspace(
+        &mut self,
+        word_state: &mut WordState,
+        total_chars_typed: &mut usize,
+        correct_chars: &mut usize,
+    ) -> bool {
         if self.typed_input.is_empty() {
-            return;
+            return false;
         }
 
+        let char_idx = self.typed_input.len() - 1;
+        let popped_result = word_state.results.get(char_idx).copied();
+
         self.typed_input.pop();
+
+        *total_chars_typed = total_chars_typed.saturating_sub(1);
+        match popped_result {
+            Some(CharResult::Correct) | Some(CharResult::Corrected) => {
+                *correct_chars = correct_chars.saturating_sub(1);
+            }
+            Some(CharResult::Incorrect) | None => {}
+        }
+
+        true
     }
 
     /// Handles space being pressed.
@@ -121,8 +145,7 @@ impl TypingTestState {
         }
 
         // Word is complete (or over-typed), advance to next word
-        let has_error =
-            self.current_word_has_error || self.typed_input.len() > word_state.target.len();
+        let has_error = word_state.completed_with_remaining_errors(&self.typed_input);
         if has_error {
             words_with_errors.push(self.current_word_idx);
         }
