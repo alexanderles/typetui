@@ -5,6 +5,7 @@ mod menu;
 mod stats;
 mod types;
 mod typing_test;
+mod wpm_chart;
 
 use std::time::{Duration, Instant};
 
@@ -41,6 +42,10 @@ pub struct App {
     pub word_option_idx: usize,
     /// Whether punctuation is enabled for word generation.
     pub punctuation: bool,
+    /// `(elapsed_secs, correct_chars)` samples while typing (for results chart).
+    wpm_samples: Vec<(f64, usize)>,
+    /// Cumulative WPM per whole second after finalization (for results chart).
+    pub wpm_chart_points: Vec<(f64, f64)>,
     /// Current application state.
     pub state: CurrentScreen,
 }
@@ -66,6 +71,8 @@ impl App {
             time_option_idx,
             word_option_idx,
             punctuation: false,
+            wpm_samples: Vec::new(),
+            wpm_chart_points: Vec::new(),
             state: CurrentScreen::Menu(menu),
         }
     }
@@ -173,6 +180,8 @@ impl App {
         self.start_time = None;
         self.end_time = None;
         self.duration = Duration::from_secs(self.time_seconds() as u64);
+        self.wpm_samples.clear();
+        self.wpm_chart_points.clear();
         self.state = CurrentScreen::TypingTest(TypingTestState::new());
     }
 
@@ -184,6 +193,8 @@ impl App {
         self.correct_chars = 0;
         self.start_time = None;
         self.end_time = None;
+        self.wpm_samples.clear();
+        self.wpm_chart_points.clear();
         let mut menu = MenuState::new();
         // Restore persisted indices
         menu.time_option_idx = self.time_option_idx;
@@ -198,6 +209,7 @@ impl App {
                 if let Some(start) = self.start_time {
                     if start.elapsed() >= self.duration {
                         self.end_time = Some(Instant::now());
+                        self.finalize_wpm_chart();
                         self.state = CurrentScreen::TestResults;
                     }
                 }
@@ -224,6 +236,12 @@ impl App {
                     &mut self.correct_chars,
                     &mut self.start_time,
                 );
+
+                if let Some(start) = self.start_time {
+                    self
+                        .wpm_samples
+                        .push((start.elapsed().as_secs_f64(), self.correct_chars));
+                }
 
                 // Extract values needed for checking if test should end
                 let typed_input_len = test_state.typed_input.len();
@@ -276,7 +294,25 @@ impl App {
 
         // Freeze the timer and end the test
         self.end_time = Some(Instant::now());
+        self.finalize_wpm_chart();
         self.state = CurrentScreen::TestResults;
+    }
+
+    /// Builds `wpm_chart_points` from `wpm_samples` using the same elapsed time as stats.
+    fn finalize_wpm_chart(&mut self) {
+        let elapsed = Stats::test_elapsed_secs(
+            self.start_time,
+            self.end_time,
+            self.duration,
+            self.test_mode,
+        );
+        if self.start_time.is_none() {
+            self.wpm_chart_points.clear();
+            return;
+        }
+        self.wpm_samples.push((elapsed, self.correct_chars));
+        self.wpm_chart_points =
+            wpm_chart::build_cumulative_wpm_points(&self.wpm_samples, elapsed);
     }
 
     /// Handles backspace being pressed.
@@ -377,6 +413,7 @@ impl App {
                 if self.test_mode == TestMode::Words {
                     self.end_time = Some(Instant::now());
                 }
+                self.finalize_wpm_chart();
                 self.state = CurrentScreen::TestResults;
             }
         }

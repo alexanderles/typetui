@@ -59,6 +59,16 @@ impl Stats {
         }
     }
 
+    /// Elapsed test time in seconds (same basis as WPM in [`Self::calculate`]).
+    pub fn test_elapsed_secs(
+        start_time: Option<Instant>,
+        end_time: Option<Instant>,
+        duration: Duration,
+        test_mode: TestMode,
+    ) -> f64 {
+        Self::calculate_elapsed_secs(start_time, end_time, duration, test_mode)
+    }
+
     /// Calculates elapsed seconds, capped at duration for timed mode.
     fn calculate_elapsed_secs(
         start_time: Option<Instant>,
